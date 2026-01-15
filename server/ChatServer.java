@@ -1,13 +1,14 @@
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 public class ChatServer {
 
-    private static Set<ClientHandler> clients =
+    static Set<ClientHandler> clients =
             Collections.synchronizedSet(new HashSet<>());
+
+    static Map<String, Set<ClientHandler>> groups =
+            Collections.synchronizedMap(new HashMap<>());
 
     public static void main(String[] args) {
         int port = 12345;
@@ -18,7 +19,7 @@ public class ChatServer {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 ClientHandler handler =
-                        new ClientHandler(clientSocket, clients);
+                        new ClientHandler(clientSocket, clients, groups);
                 clients.add(handler);
                 handler.start();
             }

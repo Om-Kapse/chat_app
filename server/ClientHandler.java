@@ -2,7 +2,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.Set;
+import java.util.*;
 
 import common.Protocol;
 public class ClientHandler extends Thread {
@@ -11,10 +11,12 @@ public class ClientHandler extends Thread {
     private PrintWriter out;
     private String username;
     private Set<ClientHandler> clients;
+    private Map<String, Set<ClientHandler>> groups;
 
-    public ClientHandler(Socket socket, Set<ClientHandler> clients) {
+    public ClientHandler(Socket socket, Set<ClientHandler> clients, Map<String, Set<ClientHandler>> groups) {
         this.socket = socket;
         this.clients = clients;
+        this.groups = groups;
     }
 
     @Override
@@ -32,24 +34,36 @@ public class ClientHandler extends Thread {
 
             String message;
             while ((message = in.readLine()) != null) {
+                String[] parts = message.split(":", 3);
+                String type = parts[0];
 
-            String[] parts = message.split(":", 3);
-            String type = parts[0];
+                switch (type) {
 
-            switch (type) {
+                    case Protocol.MSG:
+                        broadcast(username + ": " + parts[1]);
+                        break;
 
-                case Protocol.MSG:
-                    broadcast(username + ": " + parts[1]);
-                    break;
+                    case Protocol.PRIVATE:
+                        sendPrivate(parts[1], parts[2]);
+                        break;
 
-                case Protocol.PRIVATE:
-                    sendPrivate(parts[1], parts[2]);
-                    break;
+                    case Protocol.GROUP_CREATE:
+                        createGroup(parts[1]);
+                        break;
 
-                default:
-                    out.println("Unknown command");
+                    case Protocol.GROUP_JOIN:
+                        joinGroup(parts[1]);
+                        break;
+
+                    case Protocol.GROUP_MSG:
+                        sendGroupMessage(parts[1], parts[2]);
+                        break;
+
+                    default:
+                        out.println("Unknown command");
+                }
             }
-        }
+
 
         } catch (Exception e) {
             System.out.println(username + " disconnected");
@@ -73,5 +87,31 @@ public class ClientHandler extends Thread {
         }
         out.println("User not found");
     }
+    private void createGroup(String groupName) {
+        groups.putIfAbsent(groupName,
+                Collections.synchronizedSet(new HashSet<>()));
+        groups.get(groupName).add(this);
+        out.println("Group created and joined: " + groupName);
+    }
+    private void joinGroup(String groupName) {
+        Set<ClientHandler> group = groups.get(groupName);
+        if (group == null) {
+            out.println("Group does not exist");
+            return;
+        }
+        group.add(this);
+        out.println("Joined group: " + groupName);
+    }
+    private void sendGroupMessage(String groupName, String message) {
+        Set<ClientHandler> group = groups.get(groupName);
+        if (group == null) {
+            out.println("Group does not exist");
+            return;
+        }
 
+        for (ClientHandler client : group) {
+            client.out.println("[Group:" + groupName + "] "
+                    + username + ": " + message);
+        }
+    }
 }
